@@ -9,6 +9,7 @@ RUN go install github.com/cosmtrek/air@latest
 
 # Set the working directory inside the container.
 WORKDIR /app
+RUN chmod 777 /app
 
 # Copy go.mod and go.sum and download dependencies.
 COPY go.mod go.sum ./
