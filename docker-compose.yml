@@ -1,8 +1,45 @@
-version: '3.8'
+version: "3.9" 
 services:
-  goflow:
-    build: .
-    volumes:
-      - .:/app
+  postgis:
+    image: postgis/postgis:latest
+    environment:
+      - POSTGRES_USER=${POSTGIS_USER}
+      - POSTGRES_DB=${POSTGIS_DATABASE}
+      - POSTGRES_PASSWORD=${POSTGIS_PASSWORD}
     ports:
-      - "3000:3000"
+    - 5432:5432
+
+  nginx:
+    build:
+      context: .
+      dockerfile: "docker/nginx.dockerfile"
+    hostname: "nginx"
+    volumes:
+      - ./etc/nginx/app.conf:/etc/nginx/conf.d/nginx.conf
+      - ./etc/nginx/goflow.crt:/etc/ssl/goflow.crt
+      - ./etc/nginx/goflow.key:/etc/ssl/goflow.key
+    image: nginx:latest
+    ports : 
+        - 81:81
+        - 444:444
+    depends_on:
+      - service
+
+  service:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./docker/service.dockerfile
+    ports:
+      - 8080:3000
+    volumes:
+      - ./:/app
+    depends_on:
+      - postgis
+    container_name: goflow
+    environment:
+      - DB_PORT=${POSTGIS_PORT}
+      - DB_HOST=${POSTGIS_HOST}
+
+volumes:
+  minio_storage:

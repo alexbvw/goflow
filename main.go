@@ -2,8 +2,10 @@ package main
 
 import (
 	"goflow/config"
-	"goflow/controller"
-	"goflow/middleware"
+	"goflow/infrastructure/router"
+	"goflow/interface/controllers"
+	"goflow/interface/middleware"
+	"goflow/util"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,17 +21,23 @@ func main() {
 
 	config := config.FiberConfig()
 	app := fiber.New(config)
+
 	middleware.Logger(app)
 	middleware.CorsMiddleware(app)
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hellos, ")
-	})
 
-	api := app.Group("/api")
-	api.Post("/token", controller.RequestTokenHandler)
-	api.Get("/sites", controller.FetchSitesHandler)
-	api.Get("/collections", controller.FetchCollectionsHandler)
-	api.Get("/items", controller.FetchCollectionItemsHandler)
+	controllers.AssetMigration()
+	controllers.MessageMigration()
+	controllers.IdentityMigration()
+	controllers.ChatroomMigration()
 
-	app.Listen(":3000")
+	router.WebflowRoutes(app)
+	router.GitRoutes(app)
+	router.AcountRoutes(app)
+	router.IdentityRoutes(app)
+	router.AssetRoutes(app)
+	router.ChatroomRoutes(app)
+	router.MessageRoutes(app)
+	router.NotFoundRoute(app)
+
+	util.StartServer(app)
 }
