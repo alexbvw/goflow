@@ -83,7 +83,6 @@ func ChatroomMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updatechatroomMessages(client *Client) {
-
 	var messages []model.Message
 	DB.Raw(`SELECT * FROM Messages WHERE chatroom_id = $1`, client.chatroomId).Scan(&messages)
 
@@ -98,7 +97,6 @@ func updatechatroomMessages(client *Client) {
 
 		client.events <- db
 	}
-
 }
 
 // Get All Messages

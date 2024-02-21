@@ -11,34 +11,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const BaseURL = "https://api.webflow.com"
-
-func Authenticate(apiToken string) (*http.Client, error) {
-	client := &http.Client{}
-
-	// Example of setting up a request with an API token
-	req, err := http.NewRequest("GET", BaseURL+"/some-endpoint", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+apiToken)
-	req.Header.Add("accept-version", "1.0.0")
-
-	// Send the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	_, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
-}
 func RequestTokenHandler(c *fiber.Ctx) error {
 	code := c.Query("code") // Assuming 'code' is passed as a query parameter
 	var token model.Token
