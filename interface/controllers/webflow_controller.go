@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"goflow/model"
 	"io"
 	"net/http"
@@ -46,6 +47,42 @@ func RequestTokenHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"response": token})
 }
 
+func GetAuthorizedUserInfo(c *fiber.Ctx) error {
+	token := c.Get("Authorization")
+
+	// If the token is empty, return an error response
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Authorization token is required"})
+	}
+
+	client := &http.Client{}
+
+	// Setup the request
+	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2//token/authorized_by", nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Use the token from the request headers for authorization
+	req.Header.Add("Authorization", token)
+	req.Header.Add("accept-version", "1.0.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to read response body", "error": err.Error()})
+	}
+
+	// Return the response body as part of the JSON response
+	return c.JSON(fiber.Map{"response": string(body)})
+}
+
 func FetchSitesHandler(c *fiber.Ctx) error {
 	client := &http.Client{}
 
@@ -83,6 +120,46 @@ func FetchSitesHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(sitesResponse)
+}
+
+func FetchSiteHandler(c *fiber.Ctx) error {
+	siteId := c.Params("id")
+	if siteId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Site ID is required"})
+	}
+
+	token := c.Get("Authorization")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Authorization token is required"})
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2/sites/"+siteId, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create request"})
+	}
+
+	req.Header.Add("Authorization", token)
+	req.Header.Add("accept-version", "1.0.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to make request"})
+	}
+	defer resp.Body.Close()
+
+	var siteResponse model.SiteResponse
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to read response body", "error": err.Error()})
+	}
+
+	if err := json.Unmarshal(body, &siteResponse); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unmarshal response"})
+	}
+
+	return c.JSON(siteResponse)
+
 }
 
 func FetchCollectionsHandler(c *fiber.Ctx) error {
@@ -161,4 +238,53 @@ func FetchCollectionItemsHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(itemsResponse)
+}
+
+func FetchCollectionHandler(c *fiber.Ctx) error {
+	collectionId := c.Params("id")
+	if collectionId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Collection ID is required"})
+	}
+
+	token := c.Get("Authorization")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Authorization token is required"})
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2/collections/"+collectionId, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create request"})
+	}
+
+	req.Header.Add("Authorization", token)
+	req.Header.Add("accept-version", "1.0.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to make request"})
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "Request failed with status " + resp.Status})
+	}
+
+	var collectionResponse model.Collection
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to read response body", "error": err.Error()})
+	}
+
+	// Debugging: Print raw response
+	fmt.Println("Raw Response Body:", string(body))
+
+	if err := json.Unmarshal(body, &collectionResponse); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unmarshal response", "details": err.Error()})
+	}
+
+	// Debugging: Print unmarshalled response
+	fmt.Println("Unmarshalled Response:", collectionResponse)
+
+	return c.JSON(collectionResponse)
 }

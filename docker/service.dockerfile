@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine
+FROM golang:1.22-alpine
 
 WORKDIR /app
 # add some necessary packages
@@ -8,7 +8,7 @@ RUN apk update && \
     apk add make
 
 # Install Air for go. We'll use it to watch changes in go files
-RUN go install github.com/cosmtrek/air@latest    
+RUN go install github.com/air-verse/air@latest
     
 # prevent the re-installation of vendors at every change in the source code
 COPY ./go.mod go.sum ./

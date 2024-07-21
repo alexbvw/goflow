@@ -30,7 +30,7 @@ type Client struct {
 }
 type MessageChannel struct {
 	// User  uint
-	Messages []model.Message
+	Messages []model.ChatMessage
 }
 
 func MessageMigration() {
@@ -40,7 +40,7 @@ func MessageMigration() {
 		fmt.Println(err.Error())
 		panic("Cannot connect to DB")
 	}
-	DB.AutoMigrate(&model.Message{})
+	DB.AutoMigrate(&model.ChatMessage{})
 }
 
 // SSE Messages
@@ -83,7 +83,7 @@ func ChatroomMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updatechatroomMessages(client *Client) {
-	var messages []model.Message
+	var messages []model.ChatMessage
 	DB.Raw(`SELECT * FROM Messages WHERE chatroom_id = $1`, client.chatroomId).Scan(&messages)
 
 	if err != nil {
@@ -101,14 +101,14 @@ func updatechatroomMessages(client *Client) {
 
 // Get All Messages
 func GetMessages(c *fiber.Ctx) error {
-	var messages []model.Message
+	var messages []model.ChatMessage
 	DB.Find(&messages)
 	return c.JSON(&messages)
 }
 
 // Count Messages
 func GetMessagesCount(c *fiber.Ctx) error {
-	var messages []model.Message
+	var messages []model.ChatMessage
 	var messageCount int64
 	DB.Find(&messages).Count(&messageCount)
 	// return c.JSON(&messageCount)
@@ -118,14 +118,14 @@ func GetMessagesCount(c *fiber.Ctx) error {
 // Get Message by ID
 func GetMessage(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var message model.Message
+	var message model.ChatMessage
 	DB.Find(&message, id)
 	return c.JSON(&message)
 }
 
 // Create Message
 func CreateMessage(c *fiber.Ctx) error {
-	message := new(model.Message)
+	message := new(model.ChatMessage)
 	message.ID = uuid.New()
 	if err := c.BodyParser(message); err != nil {
 		return c.Status(500).SendString(err.Error())
@@ -141,7 +141,7 @@ func CreateMessage(c *fiber.Ctx) error {
 // Delete Message by ID
 func DeleteMessage(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var message model.Message
+	var message model.ChatMessage
 	DB.First(&message, id)
 	if message.Message == "" {
 		return c.Status(500).SendString("Message not available")
@@ -154,7 +154,7 @@ func DeleteMessage(c *fiber.Ctx) error {
 // PATCH Message by ID
 func UpdateMessage(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var message model.Message
+	var message model.ChatMessage
 	DB.First(&message, id)
 	if message.Message == "" {
 		return c.Status(500).SendString("Message not available")
@@ -167,7 +167,7 @@ func UpdateMessage(c *fiber.Ctx) error {
 }
 
 // Validate message before Posting
-func ValidateMessageStruct(message model.Message) []*MessageErrorResponse {
+func ValidateMessageStruct(message model.ChatMessage) []*MessageErrorResponse {
 	var errors []*MessageErrorResponse
 	validate := validator.New()
 	err := validate.Struct(message)

@@ -14,7 +14,9 @@ func WebflowRoutes(a *fiber.App) {
 
 	webflow.Post("/token", controllers.RequestTokenHandler)
 	webflow.Get("/sites", controllers.FetchSitesHandler)
+	webflow.Get("/site/:id", controllers.FetchSiteHandler)
 	webflow.Get("/collections", controllers.FetchCollectionsHandler)
+	webflow.Get("/collection/:id", controllers.FetchCollectionHandler)
 	webflow.Get("/items", controllers.FetchCollectionItemsHandler)
 
 }

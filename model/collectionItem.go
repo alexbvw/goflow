@@ -12,14 +12,17 @@ type CollectionItem struct {
 }
 
 type FieldData struct {
-	Featured       bool   `json:"featured"`
-	Color          string `json:"color"`
-	Name           string `json:"name"`
-	PostBody       string `json:"post-body"`
-	PostSummary    string `json:"post-summary"`
-	MainImage      Image  `json:"main-image"`
-	ThumbnailImage Image  `json:"thumbnail-image"`
-	Slug           string `json:"slug"`
+	DateAndTime      string `json:"date-and-time"`
+	TicketsLink      string `json:"tickets-link"`
+	Name             string `json:"name"`
+	City             string `json:"city"`
+	Country          string `json:"country"`
+	Location         string `json:"location"`
+	Venue            string `json:"venue"`
+	Description      string `json:"description"`
+	ShortDescription string `json:"short-description"`
+	Image            Image  `json:"image"`
+	Slug             string `json:"slug"`
 }
 
 type Image struct {

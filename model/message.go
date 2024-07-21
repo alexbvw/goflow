@@ -7,7 +7,7 @@ import (
 )
 
 // Message struct to describe message object.
-type Message struct {
+type ChatMessage struct {
 	ID           uuid.UUID `gorm:"type:uuid;primary_key;"`
 	ChatroomId   uuid.UUID `json:"chatroom_id"`
 	IdentityId   uuid.UUID `json:"identity_id"`
@@ -18,4 +18,4 @@ type Message struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-type Messages []Message
+type ChatMessages []ChatMessage

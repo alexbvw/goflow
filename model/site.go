@@ -32,3 +32,7 @@ type Locale struct {
 type SitesResponse struct {
 	Sites []Site `json:"sites"`
 }
+
+type SiteResponse struct {
+	Site Site `json:"site"`
+}
