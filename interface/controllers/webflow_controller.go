@@ -288,3 +288,53 @@ func FetchCollectionHandler(c *fiber.Ctx) error {
 
 	return c.JSON(collectionResponse)
 }
+
+func FetchCollectionItemHandler(c *fiber.Ctx) error {
+	collectionId := c.Params("collectionId")
+	itemId := c.Params("itemId")
+	if collectionId == "" || itemId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Collection ID or Item ID is required"})
+	}
+
+	token := c.Get("Authorization")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Authorization token is required"})
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2/collections/"+collectionId+"/items/"+itemId, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create request"})
+	}
+
+	req.Header.Add("Authorization", token)
+	req.Header.Add("accept-version", "1.0.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to make request"})
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "Request failed with status " + resp.Status})
+	}
+
+	var itemResponse model.CollectionItem
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to read response body", "error": err.Error()})
+	}
+
+	// Debugging: Print raw response
+	fmt.Println("Raw Response Body:", string(body))
+
+	if err := json.Unmarshal(body, &itemResponse); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unmarshal response", "details": err.Error()})
+	}
+
+	// Debugging: Print unmarshalled response
+	fmt.Println("Unmarshalled Response:", itemResponse)
+
+	return c.JSON(itemResponse)
+}
