@@ -13,11 +13,14 @@ func WebflowRoutes(a *fiber.App) {
 	webflow := a.Group("/v1/webflow")
 
 	webflow.Post("/token", controllers.RequestTokenHandler)
+
 	webflow.Get("/sites", controllers.FetchSitesHandler)
 	webflow.Get("/site/:id", controllers.FetchSiteHandler)
+
 	webflow.Get("/collections", controllers.FetchCollectionsHandler)
 	webflow.Get("/collections/:collectionId/items/:itemId", controllers.FetchCollectionItemHandler)
 	webflow.Get("/collection/:id", controllers.FetchCollectionHandler)
-	webflow.Get("/items", controllers.FetchCollectionItemsHandler)
 
+	webflow.Get("/items", controllers.FetchCollectionItemsHandler)
+	webflow.Put("/items/:id", controllers.UpdateCollectionItemHandler)
 }
