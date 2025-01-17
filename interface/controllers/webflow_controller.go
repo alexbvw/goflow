@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"goflow/model"
@@ -340,37 +341,149 @@ func FetchCollectionItemHandler(c *fiber.Ctx) error {
 }
 
 func UpdateCollectionItemHandler(c *fiber.Ctx) error {
-	collectionId := c.Params("id")
+	// 1. Grab path parameters
+	collectionId := c.Params("collectionId")
 	if collectionId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Collection ID is required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Collection ID is required",
+		})
 	}
+
 	itemId := c.Params("itemId")
 	if itemId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Item ID is required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Item ID is required",
+		})
 	}
+
+	// 2. Authorization header
 	token := c.Get("Authorization")
 	if token == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Authorization token is required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Authorization token is required",
+		})
 	}
 
-	client := &http.Client{}
-	req, err := http.NewRequest("PUT", os.Getenv("WEBFLOW_BASE_URL")+"/v2/collections/"+collectionId+"/items/"+itemId, nil)
+	// 3. Read the raw request body
+	rawBody := c.Body() // <-- This is the raw JSON from the client
+
+	// 4. Build the Webflow API endpoint
+	endpoint := fmt.Sprintf("%s/v2/collections/%s/items/%s",
+		os.Getenv("WEBFLOW_BASE_URL"),
+		collectionId,
+		itemId,
+	)
+
+	// 5. Create a new PATCH request
+	req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewBuffer(rawBody))
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create request"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create request: %v", err),
+		})
 	}
 
-	req.Header.Add("Authorization", token)
-	req.Header.Add("accept-version", "1.0.0")
+	// 6. Set headers
+	req.Header.Set("Authorization", token)
+	req.Header.Set("accept-version", "1.0.0")
+	req.Header.Set("Content-Type", "application/json")
 
+	// 7. Send the request
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to make request"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Request error: %v", err),
+		})
 	}
 	defer resp.Body.Close()
 
+	// 8. If Webflow API did not return 200, try to read body for error details
 	if resp.StatusCode != http.StatusOK {
-		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "Request failed with status " + resp.Status})
+		var errResp map[string]interface{}
+		if decodeErr := json.NewDecoder(resp.Body).Decode(&errResp); decodeErr == nil {
+			return c.Status(resp.StatusCode).JSON(errResp)
+		}
+		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "Request failed"})
 	}
 
-	return c.SendStatus(http.StatusOK)
+	// 9. If successful, decode the updated item from Webflow
+	var updatedItem map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&updatedItem); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to decode response: %v", err),
+		})
+	}
+
+	// 10. Return the updated item to the client
+	return c.Status(fiber.StatusOK).JSON(updatedItem)
+}
+
+func PublishCollectionItemHandler(c *fiber.Ctx) error {
+	// 1. Grab path parameters
+	collectionId := c.Params("collectionId")
+	if collectionId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Collection ID is required",
+		})
+	}
+
+	// 2. Authorization header
+	token := c.Get("Authorization")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Authorization token is required",
+		})
+	}
+
+	// 3. Read the raw request body
+	rawBody := c.Body() // <-- This is the raw JSON from the client
+
+	// 4. Build the Webflow API endpoint
+	endpoint := fmt.Sprintf("%s/v2/collections/%s/items/publish",
+		os.Getenv("WEBFLOW_BASE_URL"),
+		collectionId,
+	)
+
+	// 5. Create a new PATCH request
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(rawBody))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create request: %v", err),
+		})
+	}
+
+	// 6. Set headers
+	req.Header.Set("Authorization", token)
+	req.Header.Set("accept-version", "1.0.0")
+	req.Header.Set("Content-Type", "application/json")
+
+	// 7. Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Request error: %v", err),
+		})
+	}
+	defer resp.Body.Close()
+
+	// 8. If Webflow API did not return 200, try to read body for error details
+	if resp.StatusCode != http.StatusOK {
+		var errResp map[string]interface{}
+		if decodeErr := json.NewDecoder(resp.Body).Decode(&errResp); decodeErr == nil {
+			return c.Status(resp.StatusCode).JSON(errResp)
+		}
+		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "Request failed"})
+	}
+
+	// 9. If successful, decode the updated item from Webflow
+	var updatedItem map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&updatedItem); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to decode response: %v", err),
+		})
+	}
+
+	// 10. Return the updated item to the client
+	return c.Status(fiber.StatusOK).JSON(updatedItem)
 }
