@@ -340,7 +340,7 @@ func FetchCollectionItemHandler(c *fiber.Ctx) error {
 	return c.JSON(itemResponse)
 }
 
-func UpdateCollectionItemHandler(c *fiber.Ctx) error {
+func UpdateCollectionItemsHandler(c *fiber.Ctx) error {
 	// 1. Grab path parameters
 	collectionId := c.Params("collectionId")
 	if collectionId == "" {
@@ -348,13 +348,13 @@ func UpdateCollectionItemHandler(c *fiber.Ctx) error {
 			"error": "Collection ID is required",
 		})
 	}
-
-	itemId := c.Params("itemId")
-	if itemId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Item ID is required",
-		})
-	}
+	fmt.Println("Collection ID:", collectionId)
+	// itemId := c.Params("itemId")
+	// if itemId == "" {
+	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// 		"error": "Item ID is required",
+	// 	})
+	// }
 
 	// 2. Authorization header
 	token := c.Get("Authorization")
@@ -368,10 +368,9 @@ func UpdateCollectionItemHandler(c *fiber.Ctx) error {
 	rawBody := c.Body() // <-- This is the raw JSON from the client
 
 	// 4. Build the Webflow API endpoint
-	endpoint := fmt.Sprintf("%s/v2/collections/%s/items/%s",
+	endpoint := fmt.Sprintf("%s/v2/collections/%s/items",
 		os.Getenv("WEBFLOW_BASE_URL"),
 		collectionId,
-		itemId,
 	)
 
 	// 5. Create a new PATCH request
