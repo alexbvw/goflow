@@ -2,10 +2,13 @@ package controllers
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"goflow/model"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 
@@ -59,7 +62,7 @@ func GetAuthorizedUserInfo(c *fiber.Ctx) error {
 	client := &http.Client{}
 
 	// Setup the request
-	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2//token/authorized_by", nil)
+	req, err := http.NewRequest("GET", os.Getenv("WEBFLOW_BASE_URL")+"/v2/token/authorized_by", nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -485,4 +488,175 @@ func PublishCollectionItemHandler(c *fiber.Ctx) error {
 
 	// 10. Return the updated item to the client
 	return c.Status(fiber.StatusOK).JSON(updatedItem)
+}
+
+func UploadAssetHandler(c *fiber.Ctx) error {
+	siteID := c.Params("siteId")
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Site ID is required",
+		})
+	}
+
+	// Webflow requires "Authorization: Bearer <token>"
+	// If your token does not include "Bearer ", add it manually.
+	token := c.Get("Authorization")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Authorization token is required",
+		})
+	}
+
+	// 1) Read the file from the request (multipart/form-data)
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Please provide a valid file in the 'file' field",
+		})
+	}
+
+	// Read the file content into memory for hashing + later re-upload
+	originalFile, err := fileHeader.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not open uploaded file",
+		})
+	}
+	defer originalFile.Close()
+
+	fileBytes, err := io.ReadAll(originalFile)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Could not read uploaded file",
+		})
+	}
+
+	// 2) Compute MD5 hash of the file
+	hasher := md5.New()
+	hasher.Write(fileBytes)
+	md5Hash := hex.EncodeToString(hasher.Sum(nil))
+
+	// 3) Step One: Request S3 upload details from Webflow (top-level fileName + fileHash)
+	createAssetReqBody := map[string]interface{}{
+		"fileName": fileHeader.Filename, // e.g. "my-image.png"
+		"fileHash": md5Hash,             // e.g. "3c7d87c9575702bc3b1e991f4d3c638e"
+	}
+	reqData, err := json.Marshal(createAssetReqBody)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to marshal request body for Webflow: %v", err),
+		})
+	}
+
+	endpoint := fmt.Sprintf("%s/v2/sites/%s/assets", os.Getenv("WEBFLOW_BASE_URL"), siteID)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(reqData))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create request for Webflow: %v", err),
+		})
+	}
+	req.Header.Set("Authorization", token)
+	req.Header.Set("Accept-Version", "1.0.0")
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Request error (Webflow create asset): %v", err),
+		})
+	}
+	defer resp.Body.Close()
+
+	// *** Accept any 2xx as success, else treat as error ***
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&errResp)
+		return c.Status(resp.StatusCode).JSON(fiber.Map{
+			"error":  "Webflow create asset request failed",
+			"detail": errResp,
+		})
+	}
+
+	// 4) Parse the JSON from Webflow's response (top-level fields)
+	var wfResponse struct {
+		ID            string            `json:"id"`
+		UploadUrl     string            `json:"uploadUrl"`
+		UploadDetails map[string]string `json:"uploadDetails"`
+		AssetUrl      string            `json:"assetUrl"`
+		HostedUrl     string            `json:"hostedUrl"`
+		// etc.
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wfResponse); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to decode Webflow response: %v", err),
+		})
+	}
+
+	// 5) Step Two: Upload the actual file bytes to the returned "uploadUrl"
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	// Add each field from "uploadDetails"
+	for key, val := range wfResponse.UploadDetails {
+		_ = writer.WriteField(key, val)
+	}
+
+	// Add the file contents under form field "file"
+	part, err := writer.CreateFormFile("file", fileHeader.Filename)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create form file field: %v", err),
+		})
+	}
+	_, err = part.Write(fileBytes)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to copy file content: %v", err),
+		})
+	}
+
+	if err := writer.Close(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to close multipart writer: %v", err),
+		})
+	}
+
+	s3Req, err := http.NewRequest(http.MethodPost, wfResponse.UploadUrl, &buf)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create S3 request: %v", err),
+		})
+	}
+	s3Req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	s3Resp, err := httpClient.Do(s3Req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Error uploading to S3: %v", err),
+		})
+	}
+	defer s3Resp.Body.Close()
+
+	// Webflow's S3 returns 201 on successful file upload
+	if s3Resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(s3Resp.Body)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "S3 upload failed; expected 201",
+			"details": string(bodyBytes),
+		})
+	}
+
+	// 6) If the file was uploaded successfully to S3, Webflow finalizes the asset automatically.
+	data := fiber.Map{
+		"alt":    nil,                 // or fill this in if needed
+		"fileId": wfResponse.ID,       // from "id"
+		"url":    wfResponse.AssetUrl, // or "hostedUrl"
+	}
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"status":  200,
+		"message": "successfully uploaded file",
+		"data":    data,
+	})
 }
