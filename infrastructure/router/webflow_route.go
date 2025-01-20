@@ -24,6 +24,7 @@ func WebflowRoutes(a *fiber.App) {
 	webflow.Get("/collections/:collectionId/items/:itemId", controllers.FetchCollectionItemHandler)
 	webflow.Get("/collection/:id", controllers.FetchCollectionHandler)
 
+	webflow.Post("/items/:collectionId", controllers.CreateCollectionItemHandler)
 	webflow.Get("/items", controllers.FetchCollectionItemsHandler)
 	webflow.Put("/collection/:collectionId/items", controllers.UpdateCollectionItemsHandler)
 	webflow.Post("/collections/:collectionId/items", controllers.PublishCollectionItemHandler)
