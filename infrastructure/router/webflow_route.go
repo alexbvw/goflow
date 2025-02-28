@@ -16,11 +16,16 @@ func WebflowRoutes(a *fiber.App) {
 
 	webflow.Get("/sites", controllers.FetchSitesHandler)
 	webflow.Get("/site/:id", controllers.FetchSiteHandler)
+	webflow.Post("/sites/:siteId/assets", controllers.UploadAssetHandler)
+
+	webflow.Get("/user", controllers.GetAuthorizedUserInfo)
 
 	webflow.Get("/collections", controllers.FetchCollectionsHandler)
 	webflow.Get("/collections/:collectionId/items/:itemId", controllers.FetchCollectionItemHandler)
 	webflow.Get("/collection/:id", controllers.FetchCollectionHandler)
 
+	webflow.Post("/items/:collectionId", controllers.CreateCollectionItemHandler)
 	webflow.Get("/items", controllers.FetchCollectionItemsHandler)
-	webflow.Put("/items/:id", controllers.UpdateCollectionItemHandler)
+	webflow.Put("/collection/:collectionId/items", controllers.UpdateCollectionItemsHandler)
+	webflow.Post("/collections/:collectionId/items", controllers.PublishCollectionItemHandler)
 }
